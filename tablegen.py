@@ -1,24 +1,29 @@
 import argparse
 import csv
 import codecs
-import sys
+import datetime
+import os
+from os.path import basename
 
-stmt = 'CREATE TABLE'
-primary_key = ''
-reader = None
 
-"""parser = argparse.ArgumentParser(description='Generates an SQL CREATE TABLE statement from a CSV file')
-parser.add_argument('integers', metavar='N', type=int, nargs='+',
-                    help='an integer for the accumulator')
-parser.add_argument('--sum', dest='accumulate', action='store_const',
-                    const=sum, default=max,
-                    help='sum the integers (default: find the max)')
+
+parser = argparse.ArgumentParser(description='Generates an SQL CREATE TABLE statement from a CSV file', prog='tablegen')
+parser.add_argument('file', type=str, help='The path to the CSV file.')
+parser.add_argument('-p', '--primary', type=int, default=0, help='The number of the primary column. Specify a number outside of the range of'
+                                         ' columns(eg. -1) to indicate that there is now primary column.')
+parser.add_argument('-hr', '--header', type=int, default=0, help='The number of the header row. Specify a number outside of the range of rows'
+                                         ' (eg. -1) to indicate that there is now header row.')
+parser.add_argument('-d', '--dbms', type=str, default='psql', choices=['psql', 'mysql', 'sqlite', 'server'], help='''The targeted DBMS. Possible values:
+                                                psql
+                                                mysql
+                                                sqlite
+                                                server''')
 args = parser.parse_args()
-
-# Check arguments
-for arg in sys.argv:
-    print(arg)"""
-
+dbms = args.dbms
+headerrow = args.header
+filename = args.file
+primarycol = args.primary
+stmt = 'CREATE TABLE'
 
 def is_integer(s):
     """Checks whether the given object is an integer.
@@ -60,11 +65,11 @@ def is_boolean(s):
 
 
 def is_binary(s):
-    """Checks whether the given object is an integer.
+    """Checks whether the given object is a binary value.
     Args:
         s: The object to be checked.
     Returns:
-        A boolean value indicating whether the given object is an integer.
+        A boolean value indicating whether the given object is a binary value.
     """
     try:
         int(s, 2)
@@ -73,7 +78,17 @@ def is_binary(s):
         return False
 
 
+def is_date_time(s):
+    pass
+
+
 def get_col_sql_type(colnum):
+    """Retrieves the SQL Datatype matching the values located in the columns of the given number.
+    Args:
+        colnum: The number of the column walues in each row.
+    Returns:
+        A string containing the SQL Datatype.
+    """
     detected_binary = True
     detected_boolean = True
     detected_float = True
@@ -89,16 +104,12 @@ def get_col_sql_type(colnum):
             if num == colnum:
                 if len(column) > 0:
                     if detected_binary:
-                        print(column + ',' + 'binary')
                         detected_binary = is_binary(column)
                     if detected_boolean:
-                        print(column + ',' + 'boolean')
                         detected_boolean = is_binary(column)
                     if detected_float:
-                        print(column + ',' + 'float')
                         detected_float = is_float(column)
                     if detected_integer:
-                        print(column + ',' + 'integer')
                         detected_integer = is_integer(column)
                     if longest_value < len(column):
                         longest_value = len(column)
@@ -115,26 +126,31 @@ def get_col_sql_type(colnum):
     return 'varchar(' + str(longest_value) + ')'
 
 
-# Read CSV file
-filename = 'test.csv'
+# Read CSV file with Unicode codec
 with codecs.open(filename, 'r', 'utf-8') as csvfile:
-    stmt += ' ' + csvfile.name[:len(filename) - 4] + ' ('
+    # Concatenate the statement with the filename without extension as table name
+    stmt += ' ' + os.path.splitext(basename(filename))[0] + ' ('
     reader = csv.reader(csvfile, delimiter=',', quotechar='|')
-    rownum = 0
+    # Save rows in list
     rows = []
     for row in reader:
         rows.append(row)
+    # Interprete rows
+    rownum = 0
     for row in rows:
-        if rownum == 0:
+        # Process header row
+        if rownum == headerrow:
             colnum = 0
             for col in row:
                 stmt += ' ' + col
                 stmt += ' ' + get_col_sql_type(colnum)
-                if colnum == 0:
+                # Process primary row
+                if colnum == primarycol:
                     stmt += ' PRIMARY KEY'
                 stmt += ','
                 colnum += 1
         rownum += 1
+    # Remove the last space
     stmt = stmt[:-1]
     stmt += ');'
     print(stmt)
