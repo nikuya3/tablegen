@@ -126,6 +126,23 @@ def get_col_sql_type(colnum):
     return 'varchar(' + str(longest_value) + ')'
 
 
+def interprete_header_row(row):
+    cols = []
+    for col in row:
+        cols.append(col)
+    if primarycol < 0 or primarycol > len(cols):
+        stmt += 'id INTEGER PRIMARY KEY'
+    colnum = 0
+    for col in cols:
+        stmt += ' ' + col
+        stmt += ' ' + get_col_sql_type(colnum)
+        # Process primary row
+        if colnum == primarycol:
+            stmt += ' PRIMARY KEY'
+        stmt += ','
+        colnum += 1
+
+
 # Read CSV file with Unicode codec
 with codecs.open(filename, 'r', 'utf-8') as csvfile:
     # Concatenate the statement with the filename without extension as table name
@@ -135,24 +152,18 @@ with codecs.open(filename, 'r', 'utf-8') as csvfile:
     rows = []
     for row in reader:
         rows.append(row)
+    if headerrow < 0 or headerrow > len(rows):
+        interprete_column(rows[0])
     # Interprete rows
     rownum = 0
     for row in rows:
         # Process header row
         if rownum == headerrow:
-            colnum = 0
-            for col in row:
-                stmt += ' ' + col
-                stmt += ' ' + get_col_sql_type(colnum)
-                # Process primary row
-                if colnum == primarycol:
-                    stmt += ' PRIMARY KEY'
-                stmt += ','
-                colnum += 1
+            interprete_header_row(row)
         rownum += 1
     # Remove the last space
     stmt = stmt[:-1]
     stmt += ');'
     print(stmt)
-# tablegen test.csv -p 1 -h no -d psql
+# tablegen pl.csv -p 1 -h no -d psql
 # CREATE TABLE [file_name] ( [primary_col] [type] PRIMARY KEY, [col_header] [type], [col2_header] [type] );
