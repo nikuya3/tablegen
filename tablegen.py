@@ -6,7 +6,6 @@ import os
 from os.path import basename
 
 
-
 parser = argparse.ArgumentParser(description='Generates an SQL CREATE TABLE statement from a CSV file', prog='tablegen')
 parser.add_argument('file', type=str, help='The path to the CSV file.')
 parser.add_argument('-p', '--primary', type=int, default=0, help='The number of the primary column. Specify a number outside of the range of'
@@ -18,8 +17,10 @@ parser.add_argument('-d', '--dbms', type=str, default='psql', choices=['psql', '
                                                 mysql
                                                 sqlite
                                                 server''')
+parser.add_argument('-n', '--name', type=str, default='', help='The name of the table to be created. Leave blank to autogenerate name from file name.')
 args = parser.parse_args()
 dbms = args.dbms
+name = args.name
 headerrow = args.header
 filename = args.file
 primarycol = args.primary
@@ -79,7 +80,11 @@ def is_binary(s):
 
 
 def is_date_time(s):
-    pass
+    try:
+        datetime.datetime.strptime(s, '%Y-%m-%d')
+        return True
+    except ValueError:
+        return False
 
 
 def get_col_sql_type(colnum):
@@ -122,13 +127,19 @@ def get_col_sql_type(colnum):
     if detected_float and not detected_integer:
         return 'float'
     if detected_integer:
+        if dbms == 'server':
+            return 'int'
         return 'integer'
-    return 'varchar(' + str(longest_value) + ')'
+    next_power = 2
+    while longest_value > next_power:
+        next_power *= 2
+    return 'varchar(' + str(next_power) + ')'
 
 
-def interprete_header_row(row):
+def interprete_header_row(r):
     cols = []
-    for col in row:
+    stmt = ''
+    for col in r:
         cols.append(col)
     if primarycol < 0 or primarycol > len(cols):
         stmt += 'id INTEGER PRIMARY KEY'
@@ -141,25 +152,29 @@ def interprete_header_row(row):
             stmt += ' PRIMARY KEY'
         stmt += ','
         colnum += 1
+    return stmt
 
 
 # Read CSV file with Unicode codec
 with codecs.open(filename, 'r', 'utf-8') as csvfile:
     # Concatenate the statement with the filename without extension as table name
-    stmt += ' ' + os.path.splitext(basename(filename))[0] + ' ('
+    if len(name) == 0:
+        stmt += ' ' + os.path.splitext(basename(filename))[0] + ' ('
+    else:
+        stmt += ' ' + name + ' ('
     reader = csv.reader(csvfile, delimiter=',', quotechar='|')
     # Save rows in list
     rows = []
     for row in reader:
         rows.append(row)
     if headerrow < 0 or headerrow > len(rows):
-        interprete_column(rows[0])
+        stmt += interprete_header_row(rows[0])
     # Interprete rows
     rownum = 0
     for row in rows:
         # Process header row
         if rownum == headerrow:
-            interprete_header_row(row)
+            stmt += interprete_header_row(row)
         rownum += 1
     # Remove the last space
     stmt = stmt[:-1]
