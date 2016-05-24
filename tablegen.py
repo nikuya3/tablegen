@@ -1,7 +1,6 @@
 #!/usr/bin/python
 import argparse
 import csv
-import codecs
 import datetime
 import os
 from os.path import basename
@@ -146,6 +145,7 @@ def interprete_header_row(r):
         stmt += 'id INTEGER PRIMARY KEY'
     colnum = 0
     for col in cols:
+        col = unicode(col)
         stmt += ' ' + col
         stmt += ' ' + get_col_sql_type(colnum)
         # Process primary row
@@ -157,7 +157,7 @@ def interprete_header_row(r):
 
 
 # Read CSV file with Unicode codec
-with codecs.open(filename, 'r', 'utf-8') as csvfile:
+with open(filename, 'r') as csvfile:
     # Concatenate the statement with the filename without extension as table name
     if len(name) == 0:
         stmt += ' ' + os.path.splitext(basename(filename))[0] + ' ('
